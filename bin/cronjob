@@ -21,7 +21,9 @@ if [ $SOSH_CONFIG == "primary" ] && [ "$opt" != "--ping" ]; then
 fi
 
 solana_args=()
-if [[ -n $SOSH_RPC_URL ]]; then
+if [[ -n $SOL_RUNNER_RPC_URL ]]; then
+  solana_args+=(--url "$SOL_RUNNER_RPC_URL")
+elif [[ -n $SOSH_RPC_URL ]]; then
   solana_args+=(--url "$SOSH_RPC_URL")
 fi
 
@@ -60,28 +62,26 @@ case "$opt" in
     if (( epoch > last_epoch )); then
       total_lamport=$(total_lamports)
       echo "$epoch, $last_epoch, $total_lamport" >> ~/balance.csv
-      total_sol=$(lamports_to_sol $total_lamport)
+      total_sol="$(sol-runner node-balance -v $vote_pubkey)"
       msg="New Epoch: $epoch (previous: $last_epoch), Balance: $total_sol sol, $total_lamport lamports"
       echo $msg
       if [[ -n $SOSH_SLACK_WEBHOOK ]]; then
-        curl -X POST -H 'Content-type: application/json' --data "{\"text\":\"$msg\"}" $SOSH_SLACK_WEBHOOK
-        solana-credit-score ${solana_args[@]} --identity $vote_pubkey --reason new_epoch
+        sol-runner ${solana_args[@]} node-status -v $vote_pubkey -w $STAKE_WITHDRAWER -p new-epoch
       fi
     else
       if [[ -n $SOSH_SLACK_WEBHOOK ]]; then
-        solana-credit-score ${solana_args[@]} --identity $vote_pubkey --reason hourly
+        sol-runner ${solana_args[@]} node-status -v $vote_pubkey -w $STAKE_WITHDRAWER -p alert
       fi
     fi
     ;;
   "--daily" )
     echo "Running daily variant"
     total_lamport=$(total_lamports)
-    total_sol=$(lamports_to_sol $total_lamport)
+    total_sol="$(sol-runner node-balance -v $vote_pubkey)"
     msg="Epoch: $epoch (previous: $last_epoch), Balance: $total_sol sol, $total_lamport lamports"
     echo $msg
     if [[ -n $SOSH_SLACK_WEBHOOK ]]; then
-      curl -X POST -H 'Content-type: application/json' --data "{\"text\":\"$msg\"}" $SOSH_SLACK_WEBHOOK
-      solana-credit-score ${solana_args[@]} --identity $vote_pubkey --reason daily
+      sol-runner ${solana_args[@]} node-status -v $vote_pubkey -w $STAKE_WITHDRAWER -p periodic
     fi
     ;;
   "--ping" )
@@ -91,7 +91,7 @@ case "$opt" in
   *)
     echo "Running unknown variant"
     total_lamport=$(total_lamports)
-    total_sol=$(lamports_to_sol $total_lamport)
+    total_sol="$(sol-runner node-balance -v $vote_pubkey)"
     msg="Epoch: $epoch (previous: $last_epoch), Balance: $total_sol sol, $total_lamport lamports"
     echo $msg
     ;;
