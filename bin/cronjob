@@ -51,7 +51,7 @@ if [ -f ~/balance.csv ]; then
   last_epoch=$(tail -n 1 ~/balance.csv | cut -f 1 -d ',')
 fi
 
-epoch="$(solana ${solana_args[@]} epoch)"
+current_epoch="$(solana ${solana_args[@]} epoch)"
 vote_pubkey="$(solana-keygen pubkey ~/keys/primary/validator-vote-account.json)"
 export LATITUDE_API_KEY
 export SLACK_WEBHOOK=$SOSH_SLACK_WEBHOOK
@@ -59,11 +59,22 @@ export SLACK_WEBHOOK=$SOSH_SLACK_WEBHOOK
 case "$opt" in
   "--hourly" )
     echo "Running hourly variant"
-    if (( epoch > last_epoch )); then
+    latest_epoch_in_table="$(balancing -s ~/balancing/config/settings.yaml latest-epoch)"
+    declare -i next_expected_complete_epoch=latest_epoch_in_table+1
+    if (( current_epoch > next_expected_complete_epoch )); then
+      node_balance="$(sol-runner ${solana_args[@]} node-balance -v $vote_pubkey)"
+      stake_balance="$(sol-runner ${solana_args[@]} stake-balance -w $STAKE_WITHDRAWER)"
+      stake_rewards="$(sol-runner ${solana_args[@]} stake-rewards -w $STAKE_WITHDRAWER)"
+      jito_rewards="$(sol-runner ${solana_args[@]} jito-rewards -w $STAKE_WITHDRAWER)"
+      fmv="$(sol-runner ${solana_args[@]} price)"
+      now="$(date '+%m/%d/%Y')"
+      balancing -s ~/balancing/config/settings.yaml update-epoch -e $next_expected_complete_epoch -d $now -j $jito_rewards -s $stake_rewards -f $fmv -n $node_balance -b $stake_balance
+    fi
+    if (( current_epoch > last_epoch )); then
       total_lamport=$(total_lamports)
-      echo "$epoch, $last_epoch, $total_lamport" >> ~/balance.csv
-      total_sol="$(sol-runner node-balance -v $vote_pubkey)"
-      msg="New Epoch: $epoch (previous: $last_epoch), Balance: $total_sol sol, $total_lamport lamports"
+      echo "$current_epoch, $last_epoch, $total_lamport" >> ~/balance.csv
+      total_sol="$(sol-runner ${solana_args[@]} node-balance -v $vote_pubkey)"
+      msg="New Epoch: $current_epoch (previous: $last_epoch), Balance: $total_sol sol, $total_lamport lamports"
       echo $msg
       if [[ -n $SOSH_SLACK_WEBHOOK ]]; then
         sol-runner ${solana_args[@]} node-status -v $vote_pubkey -w $STAKE_WITHDRAWER -p new-epoch
@@ -77,8 +88,8 @@ case "$opt" in
   "--daily" )
     echo "Running daily variant"
     total_lamport=$(total_lamports)
-    total_sol="$(sol-runner node-balance -v $vote_pubkey)"
-    msg="Epoch: $epoch (previous: $last_epoch), Balance: $total_sol sol, $total_lamport lamports"
+    total_sol="$(sol-runner ${solana_args[@]} node-balance -v $vote_pubkey)"
+    msg="Epoch: $current_epoch (previous: $last_epoch), Balance: $total_sol sol, $total_lamport lamports"
     echo $msg
     if [[ -n $SOSH_SLACK_WEBHOOK ]]; then
       sol-runner ${solana_args[@]} node-status -v $vote_pubkey -w $STAKE_WITHDRAWER -p periodic
@@ -91,8 +102,8 @@ case "$opt" in
   *)
     echo "Running unknown variant"
     total_lamport=$(total_lamports)
-    total_sol="$(sol-runner node-balance -v $vote_pubkey)"
-    msg="Epoch: $epoch (previous: $last_epoch), Balance: $total_sol sol, $total_lamport lamports"
+    total_sol="$(sol-runner ${solana_args[@]} node-balance -v $vote_pubkey)"
+    msg="Epoch: $current_epoch (previous: $last_epoch), Balance: $total_sol sol, $total_lamport lamports"
     echo $msg
     ;;
 esac
