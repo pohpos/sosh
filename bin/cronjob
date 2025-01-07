@@ -27,29 +27,9 @@ elif [[ -n $SOSH_RPC_URL ]]; then
   solana_args+=(--url "$SOSH_RPC_URL")
 fi
 
-
-total_lamports() {
-  declare -i validator_lamports="$(solana ${solana_args[@]} balance ~/keys/primary/validator-identity.json --output json-compact | python3 -c "import sys, json; print(json.load(sys.stdin)['lamports'])")"
-  declare -i vote_lamports="$(solana ${solana_args[@]} balance ~/keys/primary/validator-vote-account.json --output json-compact | python3 -c "import sys, json; print(json.load(sys.stdin)['lamports'])")"
-  declare -i signer_lamports="$(solana ${solana_args[@]} balance $(<~/keys/primary/validator-vote-auth-pubkey) --output json-compact | python3 -c "import sys, json; print(json.load(sys.stdin)['lamports'])")"
-
-  declare -i lamport=validator_lamports+vote_lamports+signer_lamports
-  echo "$lamport"
-}
-
-lamports_to_sol() {
-  sol=$(echo "scale=3; $1 / 1000000000" | bc -l)
-  echo "$sol"
-}
-
 is_reachable() {
-  ping $1 -q -c 1 -W 1 || curl -X POST -H 'Content-type: application/json' --data "{\"text\":\"$1 in unreachable\"}" $SOSH_SLACK_WEBHOOK
+  ping $1 -q -c 1 -W 1 || curl -X POST -H 'Content-type: application/json' --data "{\"text\":\"<@channel> $1 in unreachable\"}" $SOSH_SLACK_WEBHOOK
 }
-
-declare -i last_epoch=0
-if [ -f ~/balance.csv ]; then
-  last_epoch=$(tail -n 1 ~/balance.csv | cut -f 1 -d ',')
-fi
 
 current_epoch="$(solana ${solana_args[@]} epoch)"
 vote_pubkey="$(solana-keygen pubkey ~/keys/primary/validator-vote-account.json)"
@@ -69,12 +49,8 @@ case "$opt" in
       fmv="$(sol-runner ${solana_args[@]} price)"
       now="$(date '+%m/%d/%Y')"
       balancing -s ~/balancing/config/settings.yaml update-epoch -e $next_expected_complete_epoch -d $now -j $jito_rewards -s $stake_rewards -f $fmv -n $node_balance -b $stake_balance
-    fi
-    if (( current_epoch > last_epoch )); then
-      total_lamport=$(total_lamports)
-      echo "$current_epoch, $last_epoch, $total_lamport" >> ~/balance.csv
-      total_sol="$(sol-runner ${solana_args[@]} node-balance -v $vote_pubkey)"
-      msg="New Epoch: $current_epoch (previous: $last_epoch), Balance: $total_sol sol, $total_lamport lamports"
+
+      msg="New Epoch: $current_epoch (previous: $next_expected_complete_epoch), Balance: $node_balance sol"
       echo $msg
       if [[ -n $SOSH_SLACK_WEBHOOK ]]; then
         sol-runner ${solana_args[@]} node-status -v $vote_pubkey -w $STAKE_WITHDRAWER -p new-epoch
@@ -84,26 +60,29 @@ case "$opt" in
         sol-runner ${solana_args[@]} node-status -v $vote_pubkey -w $STAKE_WITHDRAWER -p alert
       fi
     fi
+    balancing -s ~/balancing/config/settings.yaml drain-wallets -p ~/balancing/keys --url "$SOL_RUNNER_RPC_URL"
     ;;
   "--daily" )
     echo "Running daily variant"
-    total_lamport=$(total_lamports)
-    total_sol="$(sol-runner ${solana_args[@]} node-balance -v $vote_pubkey)"
-    msg="Epoch: $current_epoch (previous: $last_epoch), Balance: $total_sol sol, $total_lamport lamports"
+    node_balance="$(sol-runner ${solana_args[@]} node-balance -v $vote_pubkey)"
+    msg="Epoch: $current_epoch, Balance: $node_balance sol"
     echo $msg
     if [[ -n $SOSH_SLACK_WEBHOOK ]]; then
       sol-runner ${solana_args[@]} node-status -v $vote_pubkey -w $STAKE_WITHDRAWER -p periodic
     fi
+    balancing -s ~/balancing/config/settings.yaml consolidate-usdc -p ~/balancing/keys --url "$SOL_RUNNER_RPC_URL"
     ;;
   "--ping" )
     echo "Running ping variant"
     is_reachable $SOSH_RESTART_XFERID_FAILOVER_HOSTNAME
+    if [ $SOSH_CONFIG != "primary" ]; then
+      balancing -s ~/balancing/config/settings.yaml confirm-sales --url "$SOL_RUNNER_RPC_URL"
+    fi
     ;;
   *)
     echo "Running unknown variant"
-    total_lamport=$(total_lamports)
-    total_sol="$(sol-runner ${solana_args[@]} node-balance -v $vote_pubkey)"
-    msg="Epoch: $current_epoch (previous: $last_epoch), Balance: $total_sol sol, $total_lamport lamports"
+    node_balance="$(sol-runner ${solana_args[@]} node-balance -v $vote_pubkey)"
+    msg="Epoch: $current_epoch, Balance: $node_balance sol"
     echo $msg
     ;;
 esac
