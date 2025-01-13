@@ -38,7 +38,7 @@ export SLACK_WEBHOOK=$SOSH_SLACK_WEBHOOK
 
 case "$opt" in
   "--hourly" )
-    echo "Running hourly variant"
+    printf "\nRunning hourly variant\n"
     latest_epoch_in_table="$(balancing -s ~/balancing/config/settings.yaml latest-epoch)"
     declare -i next_expected_complete_epoch=latest_epoch_in_table+1
     if (( current_epoch > next_expected_complete_epoch )); then
@@ -48,7 +48,7 @@ case "$opt" in
       jito_rewards="$(sol-runner ${solana_args[@]} jito-rewards -w $STAKE_WITHDRAWER)"
       fmv="$(sol-runner ${solana_args[@]} price)"
       now="$(date '+%m/%d/%Y')"
-      balancing -s ~/balancing/config/settings.yaml update-epoch -e $next_expected_complete_epoch -d $now -j $jito_rewards -s $stake_rewards -f $fmv -n $node_balance -b $stake_balance
+      RUST_LOG=balancing=info balancing -s ~/balancing/config/settings.yaml update-epoch -e $next_expected_complete_epoch -d $now -j $jito_rewards -s $stake_rewards -f $fmv -n $node_balance -b $stake_balance
 
       msg="New Epoch: $current_epoch (previous: $next_expected_complete_epoch), Balance: $node_balance sol"
       echo $msg
@@ -60,23 +60,24 @@ case "$opt" in
         sol-runner ${solana_args[@]} node-status -v $vote_pubkey -w $STAKE_WITHDRAWER -p alert
       fi
     fi
-    balancing -s ~/balancing/config/settings.yaml drain-wallets -p ~/balancing/keys --url "$SOL_RUNNER_RPC_URL"
+    SLACK_WEBHOOK=$SOSH_SALES_SLACK_WEBHOOK RUST_LOG=balancing=info balancing -s ~/balancing/config/settings.yaml drain-wallets -p ~/balancing/keys --url http://127.0.0.1:8899/
+    SLACK_WEBHOOK=$SOSH_SALES_SLACK_WEBHOOK RUST_LOG=balancing=info balancing -s ~/balancing/config/settings.yaml confirm-sales --url "$SOL_RUNNER_RPC_URL"
     ;;
   "--daily" )
-    echo "Running daily variant"
+    printf "\nRunning daily variant\n"
     node_balance="$(sol-runner ${solana_args[@]} node-balance -v $vote_pubkey)"
     msg="Epoch: $current_epoch, Balance: $node_balance sol"
     echo $msg
     if [[ -n $SOSH_SLACK_WEBHOOK ]]; then
       sol-runner ${solana_args[@]} node-status -v $vote_pubkey -w $STAKE_WITHDRAWER -p periodic
     fi
-    balancing -s ~/balancing/config/settings.yaml consolidate-usdc -p ~/balancing/keys --url "$SOL_RUNNER_RPC_URL"
+    SLACK_WEBHOOK=$SOSH_SALES_SLACK_WEBHOOK RUST_LOG=balancing=info balancing -s ~/balancing/config/settings.yaml consolidate-usdc -p ~/balancing/keys --url http://127.0.0.1:8899/
     ;;
   "--ping" )
-    echo "Running ping variant"
+    printf "\nRunning ping variant\n"
     is_reachable $SOSH_RESTART_XFERID_FAILOVER_HOSTNAME
     if [ $SOSH_CONFIG != "primary" ]; then
-      balancing -s ~/balancing/config/settings.yaml confirm-sales --url "$SOL_RUNNER_RPC_URL"
+      SLACK_WEBHOOK=$SOSH_SALES_SLACK_WEBHOOK RUST_LOG=balancing=info balancing -s ~/balancing/config/settings.yaml confirm-sales --url "$SOL_RUNNER_RPC_URL"
     fi
     ;;
   *)
