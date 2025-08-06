@@ -70,6 +70,7 @@ case "$opt" in
       sol-runner ${solana_args[@]} node-status -v $vote_pubkey -w $STAKE_WITHDRAWER -p periodic
     fi
     SLACK_WEBHOOK=$SOSH_SALES_SLACK_WEBHOOK RUST_LOG=balancing=info balancing -s ~/balancing/config/settings.yaml consolidate-usdc -p ~/balancing/keys --url http://127.0.0.1:8899/
+    #SLACK_WEBHOOK=$SOSH_SALES_SLACK_WEBHOOK RUST_LOG=balancing=info balancing -s ~/balancing/config/settings.yaml consolidate-usdc -p ~/balancing/keys --url "$SOL_RUNNER_RPC_URL"
     ;;
   "--ping" )
     printf "\nRunning ping variant\n"
@@ -77,6 +78,7 @@ case "$opt" in
     if [ $SOSH_CONFIG != "primary" ]; then
       SLACK_WEBHOOK=$SOSH_SALES_SLACK_WEBHOOK RUST_LOG=balancing=info balancing -s ~/balancing/config/settings.yaml confirm-sales --url "$SOL_RUNNER_RPC_URL"
       SLACK_WEBHOOK=$SOSH_SALES_SLACK_WEBHOOK RUST_LOG=balancing=info balancing -s ~/balancing/config/settings.yaml drain-wallets -p ~/balancing/keys --url http://127.0.0.1:8899/
+      #SLACK_WEBHOOK=$SOSH_SALES_SLACK_WEBHOOK RUST_LOG=balancing=info balancing -s ~/balancing/config/settings.yaml drain-wallets -p ~/balancing/keys --url "$SOL_RUNNER_RPC_URL"
       SLACK_WEBHOOK=$SOSH_SALES_SLACK_WEBHOOK RUST_LOG=balancing=info balancing -s ~/balancing/config/settings.yaml confirm-sales --url "$SOL_RUNNER_RPC_URL"
     fi
     ;;
