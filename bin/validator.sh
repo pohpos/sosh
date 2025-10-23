@@ -36,7 +36,7 @@ find ~/ledger/ -name 'snapshot-*' -size 0 -print -exec rm {} \; || true
 args=(
   --no-untrusted-rpc
   --gossip-port $SOSH_GOSSIP_PORT
-  --dynamic-port-range $SOSH_GOSSIP_PORT-$((SOSH_GOSSIP_PORT + 22))
+  --dynamic-port-range $SOSH_GOSSIP_PORT-$((SOSH_GOSSIP_PORT + 25))
   --identity $SOSH_VALIDATOR_IDENTITY
   --ledger ~/ledger
   --expected-genesis-hash $SOSH_EXPECTED_GENESIS_HASH
@@ -53,7 +53,7 @@ args=(
   --rpc-port 8899
   --full-rpc-api
   --rpc-send-leader-count 3 # (default is 2)
-  --skip-poh-verify
+  #--skip-poh-verify
   --no-poh-speed-test
   --wal-recovery-mode skip_any_corrupted_record
   #--full-snapshot-interval-slots 12000
@@ -75,13 +75,13 @@ if [[ -n $SOSH_RPC_PUBSUB_NOTIFICATION_THREADS ]]; then
   args+=(--rpc-pubsub-notification-threads $SOSH_RPC_PUBSUB_NOTIFICATION_THREADS)
 fi
 
-if [[ -n $SOSH_ACCOUNTS_INDEX_MEMORY_LIMIT_MB ]]; then
-  args+=(
-    --accounts-index-memory-limit-mb $SOSH_ACCOUNTS_INDEX_MEMORY_LIMIT_MB
-  )
-else
-  args+=(--disable-accounts-disk-index)
-fi
+#if [[ -n $SOSH_ACCOUNTS_INDEX_MEMORY_LIMIT_MB ]]; then
+#  args+=(
+#    --accounts-index-memory-limit-mb $SOSH_ACCOUNTS_INDEX_MEMORY_LIMIT_MB
+#  )
+#else
+args+=(--disable-accounts-disk-index)
+#fi
 
 
 if [[ -r ~/ledger/genesis.bin ]]; then
@@ -111,7 +111,8 @@ case $v in
   ;;
 *)
   echo Solana 1.19 or greater detected
-  args+=(--replay-slots-concurrently)
+  args+=(--replay-forks-threads 4)
+  #args+=(--replay-slots-concurrently)
   #args+=(--use-snapshot-archives-at-startup when-newest)
   ;;
 esac
