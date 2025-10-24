@@ -248,6 +248,7 @@ Restart=always
 RestartSec=1
 User=$USER
 LimitNOFILE=2000000
+LimitMEMLOCK=2000000000
 LogRateLimitIntervalSec=0
 ExecStart=$HOME/sosh/bin/validator.sh
 
