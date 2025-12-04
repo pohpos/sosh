@@ -80,7 +80,7 @@ fi
 #    --accounts-index-memory-limit-mb $SOSH_ACCOUNTS_INDEX_MEMORY_LIMIT_MB
 #  )
 #else
-args+=(--disable-accounts-disk-index)
+# args+=(--disable-accounts-disk-index)
 #fi
 
 
