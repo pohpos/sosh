@@ -34,6 +34,7 @@ is_reachable() {
 current_epoch="$(solana ${solana_args[@]} epoch)"
 vote_pubkey="$(solana-keygen pubkey ~/keys/primary/validator-vote-account.json)"
 export LATITUDE_API_KEY
+export JUP_API_KEY
 export SLACK_WEBHOOK=$SOSH_SLACK_WEBHOOK
 
 case "$opt" in
@@ -77,7 +78,7 @@ case "$opt" in
     is_reachable $SOSH_RESTART_XFERID_FAILOVER_HOSTNAME
     if [ $SOSH_CONFIG != "primary" ]; then
       SLACK_WEBHOOK=$SOSH_SALES_SLACK_WEBHOOK RUST_LOG=balancing=info balancing -s ~/balancing/config/settings.yaml confirm-sales --url "$SOL_RUNNER_RPC_URL"
-      QUOTE_API_URL=https://lite-api.jup.ag/swap/v1 SLACK_WEBHOOK=$SOSH_SALES_SLACK_WEBHOOK RUST_LOG=balancing=info balancing -s ~/balancing/config/settings.yaml drain-wallets -p ~/balancing/keys --url "$SOL_RUNNER_RPC_URL"
+      SLACK_WEBHOOK=$SOSH_SALES_SLACK_WEBHOOK RUST_LOG=balancing=info balancing -s ~/balancing/config/settings.yaml drain-wallets -p ~/balancing/keys --url "$SOL_RUNNER_RPC_URL"
       # SLACK_WEBHOOK=$SOSH_SALES_SLACK_WEBHOOK RUST_LOG=balancing=info balancing -s ~/balancing/config/settings.yaml confirm-sales --url "$SOL_RUNNER_RPC_URL"
     fi
     ;;
