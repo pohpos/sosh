@@ -47,7 +47,8 @@ case "$opt" in
       stake_balance="$(sol-runner ${solana_args[@]} stake-balance -w $STAKE_WITHDRAWER)"
       stake_rewards="$(sol-runner ${solana_args[@]} stake-rewards -w $STAKE_WITHDRAWER)"
       jito_rewards="$(sol-runner ${solana_args[@]} jito-rewards -w $STAKE_WITHDRAWER)"
-      fmv="$(sol-runner ${solana_args[@]} price)"
+      # fmv="$(sol-runner ${solana_args[@]} price)"
+      fmv="$(balancing -s ~/balancing/config/settings.yaml price)"
       now="$(date '+%m/%d/%Y')"
       RUST_LOG=balancing=info balancing -s ~/balancing/config/settings.yaml update-epoch -e $next_expected_complete_epoch -d $now -j $jito_rewards -s $stake_rewards -f $fmv -n $node_balance -b $stake_balance
 
@@ -91,6 +92,8 @@ case "$opt" in
     ;;
   *)
     echo "Running unknown variant"
+    fmv="$(balancing -s ~/balancing/config/settings.yaml price)"
+    echo "current price is $fmv"
     node_balance="$(sol-runner ${solana_args[@]} node-balance -v $vote_pubkey)"
     msg="Epoch: $current_epoch, Balance: $node_balance sol"
     echo $msg
