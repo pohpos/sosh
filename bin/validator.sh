@@ -179,6 +179,9 @@ if [[ -n $JITO ]]; then
   if [[ -n $SHRED_RECEIVER_ADDR ]]; then
     args+=(--shred-receiver-address $SHRED_RECEIVER_ADDR)
   fi
+  if [[ -n $BAM_NODE_URL ]]; then
+    args+=(--bam-url $BAM_NODE_URL)
+  fi
 fi
 
 if [[ -n $SOSH_SLACK_WEBHOOK ]]; then
