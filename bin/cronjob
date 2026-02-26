@@ -31,6 +31,43 @@ is_reachable() {
   ping $1 -q -c 1 -W 1 || curl -X POST -H 'Content-type: application/json' --data "{\"text\":\"<@channel> $1 in unreachable\"}" $SOSH_SLACK_WEBHOOK
 }
 
+process_completed_epoch() {
+  completed_epoch=$1
+  current_epoch=$2
+  node_balance="$(sol-runner ${solana_args[@]} node-balance -v $vote_pubkey)"
+  stake_balance="$(sol-runner ${solana_args[@]} stake-balance -w $STAKE_WITHDRAWER)"
+  stake_rewards="$(sol-runner ${solana_args[@]} stake-rewards -w $STAKE_WITHDRAWER)"
+  jito_rewards="$(sol-runner ${solana_args[@]} jito-rewards -w $STAKE_WITHDRAWER)"
+  fmv="$(sol-runner ${solana_args[@]} price)"
+  # fmv="$(balancing -s ~/balancing/config/settings.yaml price)"
+  now="$(date '+%m/%d/%Y')"
+  RUST_LOG=balancing=info balancing -s ~/balancing/config/settings.yaml update-epoch -e $completed_epoch -d $now -j $jito_rewards -s $stake_rewards -f $fmv -n $node_balance -b $stake_balance
+
+  msg="New Epoch: $current_epoch (previous: $completed_epoch), Balance: $node_balance sol"
+  echo $msg
+}
+
+maybe_claim_subsidy() {
+  latest_epoch_in_table="$(balancing -s ~/balancing/config/settings.yaml latest-epoch)"
+  latest_jito_claim_epoch="$(balancing -s ~/balancing/config/settings.yaml latest-jito-claim-epoch)"
+  declare -i claim_subsidy_for_epoch=latest_epoch_in_table-1
+  if (( claim_subsidy_for_epoch > latest_jito_claim_epoch )); then
+    echo "Checking Jito subsidy claim for $claim_subsidy_for_epoch epoch"
+    subsidy="$(jito-bam-boost-cli bam-boost merkle-distributor claim --network mainnet --epoch $claim_subsidy_for_epoch --rpc-url $SOL_RUNNER_RPC_URL --signer ~/keys/primary/validator-identity.json --commitment confirmed --jito-bam-boost-program-id BoostxbPp2ENYHGcTLYt1obpcY13HE4NojdqNWdzqSSb)" || EXIT_CODE=$?
+    if [ "${EXIT_CODE:-0}" -eq 0 ]; then
+      echo "Claim succeeded. Subsidy is $subsidy."
+      now="$(date '+%m/%d/%Y')"
+      jitosol_fmv="$(sol-runner ${solana_args[@]} jitosol-price)"
+      echo "FMV is $jitosol_fmv."
+      RUST_LOG=balancing=info balancing -s ~/balancing/config/settings.yaml jito-subsidy -d $now -e $claim_subsidy_for_epoch -f $jitosol_fmv -c $subsidy
+    else
+      echo "Claim failed"
+    fi
+  else
+    echo "Jito subsidy has already been claimed for epoch $claim_subsidy_for_epoch. Latest epoch in the table is $latest_jito_claim_epoch"
+  fi
+}
+
 current_epoch="$(solana ${solana_args[@]} epoch)"
 vote_pubkey="$(solana-keygen pubkey ~/keys/primary/validator-vote-account.json)"
 export LATITUDE_API_KEY
@@ -43,17 +80,7 @@ case "$opt" in
     latest_epoch_in_table="$(balancing -s ~/balancing/config/settings.yaml latest-epoch)"
     declare -i next_expected_complete_epoch=latest_epoch_in_table+1
     if (( current_epoch > next_expected_complete_epoch )); then
-      node_balance="$(sol-runner ${solana_args[@]} node-balance -v $vote_pubkey)"
-      stake_balance="$(sol-runner ${solana_args[@]} stake-balance -w $STAKE_WITHDRAWER)"
-      stake_rewards="$(sol-runner ${solana_args[@]} stake-rewards -w $STAKE_WITHDRAWER)"
-      jito_rewards="$(sol-runner ${solana_args[@]} jito-rewards -w $STAKE_WITHDRAWER)"
-      # fmv="$(sol-runner ${solana_args[@]} price)"
-      fmv="$(balancing -s ~/balancing/config/settings.yaml price)"
-      now="$(date '+%m/%d/%Y')"
-      RUST_LOG=balancing=info balancing -s ~/balancing/config/settings.yaml update-epoch -e $next_expected_complete_epoch -d $now -j $jito_rewards -s $stake_rewards -f $fmv -n $node_balance -b $stake_balance
-
-      msg="New Epoch: $current_epoch (previous: $next_expected_complete_epoch), Balance: $node_balance sol"
-      echo $msg
+      process_completed_epoch "$next_expected_complete_epoch" "$current_epoch"
       if [[ -n $SOSH_SLACK_WEBHOOK ]]; then
         sol-runner ${solana_args[@]} node-status -v $vote_pubkey -w $STAKE_WITHDRAWER -p new-epoch
       fi
@@ -62,6 +89,9 @@ case "$opt" in
         sol-runner ${solana_args[@]} node-status -v $vote_pubkey -w $STAKE_WITHDRAWER -p alert
       fi
     fi
+
+    # Claim Jito BAM subsidy if it's available
+    maybe_claim_subsidy
     ;;
   "--daily" )
     printf "\nRunning daily variant\n"
@@ -92,7 +122,8 @@ case "$opt" in
     ;;
   *)
     echo "Running unknown variant"
-    fmv="$(balancing -s ~/balancing/config/settings.yaml price)"
+    # fmv="$(balancing -s ~/balancing/config/settings.yaml price)"
+    fmv="$(sol-runner ${solana_args[@]} price)"
     echo "current price is $fmv"
     node_balance="$(sol-runner ${solana_args[@]} node-balance -v $vote_pubkey)"
     msg="Epoch: $current_epoch, Balance: $node_balance sol"
