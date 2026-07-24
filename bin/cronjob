@@ -31,6 +31,29 @@ is_reachable() {
   ping $1 -q -c 1 -W 1 || curl -X POST -H 'Content-type: application/json' --data "{\"text\":\"<@channel> $1 in unreachable\"}" $SOSH_SLACK_WEBHOOK
 }
 
+maybe_top_off_vote_account() {
+  vote_account_balance="$(solana ${solana_args[@]} balance --lamports $vote_pubkey | cut -f 1 -d ' ')"
+  if (( vote_account_balance < 2000000000 )); then
+    echo "Vote account needs to be topped off. Current balance is low: $vote_account_balance"
+    validator_id_account_balance="$(solana ${solana_args[@]} balance --lamports $validator_id_pubkey | cut -f 1 -d ' ')"
+    if (( validator_id_account_balance > 4000000000 )); then
+      available_lamports=$((validator_id_account_balance - 2000000000))
+      available_SOLs=$((available_lamports / 1000000000))
+      echo "$available_lamports lamports (or $available_SOLs SOLs) could be transferrred"
+      if (( available_SOLs > 16)); then
+        available_SOLs=16
+      fi
+      echo "$available_SOLs would be sufficient for the next few epochs"
+      test_SOLs=2
+      solana ${solana_args[@]} transfer --from ~/keys/primary/validator-identity.json -k ~/keys/primary/validator-identity.json $vote_pubkey $test_SOLs
+    else
+      echo "Validator doesn't have enough funds to top off vote account: $validator_id_account_balance"
+    fi
+  else
+    echo "Vote account has enough funds: $vote_account_balance"
+  fi
+}
+
 process_completed_epoch() {
   completed_epoch=$1
   current_epoch=$2
@@ -70,6 +93,7 @@ maybe_claim_subsidy() {
 
 current_epoch="$(solana ${solana_args[@]} epoch)"
 vote_pubkey="$(solana-keygen pubkey ~/keys/primary/validator-vote-account.json)"
+validator_id_pubkey="$(solana-keygen pubkey ~/keys/primary/validator-identity.json)"
 export LATITUDE_API_KEY
 export JUP_API_KEY
 export SLACK_WEBHOOK=$SOSH_SLACK_WEBHOOK
@@ -92,6 +116,9 @@ case "$opt" in
 
     # Claim Jito BAM subsidy if it's available
     maybe_claim_subsidy
+
+    # top off vote account if needed
+    maybe_top_off_vote_account
     ;;
   "--daily" )
     printf "\nRunning daily variant\n"
