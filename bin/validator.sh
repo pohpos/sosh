@@ -36,7 +36,7 @@ find ~/ledger/ -name 'snapshot-*' -size 0 -print -exec rm {} \; || true
 args=(
   --no-untrusted-rpc
   --gossip-port $SOSH_GOSSIP_PORT
-  --dynamic-port-range $SOSH_GOSSIP_PORT-$((SOSH_GOSSIP_PORT + 25))
+  --dynamic-port-range $SOSH_GOSSIP_PORT-$((SOSH_GOSSIP_PORT + 26))
   --identity $SOSH_VALIDATOR_IDENTITY
   --ledger ~/ledger
   --expected-genesis-hash $SOSH_EXPECTED_GENESIS_HASH
